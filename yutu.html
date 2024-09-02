@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plataforma de Videos</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* Estilos generales */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+        header {
+            background-color: #333;
+            color: #fff;
+            padding: 10px;
+            text-align: center;
+        }
+        nav a {
+            color: #fff;
+            text-decoration: none;
+            margin: 0 10px;
+        }
+        .section {
+            padding: 20px;
+            display: none;
+        }
+        .section.active {
+            display: block;
+        }
+        .video-container {
+            margin-bottom: 20px;
+        }
+        .video-title, .video-uploader, .video-controls {
+            margin: 10px 0;
+        }
+        .comments-section {
+            margin-top: 10px;
+        }
+        .comment {
+            margin-bottom: 10px;
+        }
+        .comment-header {
+            font-weight: bold;
+        }
+        .add-comment {
+            display: flex;
+            gap: 10px;
+        }
+        .add-comment input {
+            flex: 1;
+        }
+        .reply {
+            margin-left: 20px;
+            background-color: #f9f9f9;
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid #ddd;
+            margin-bottom: 5px;
+        }
+        .reply .comment-header {
+            font-size: 12px;
+        }
+        #logoutButton {
+            display: none; /* Oculta el botón por defecto */
+        }
+        .comments-toggle {
+            cursor: pointer;
+            color: #007bff;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Cris yutu</h1>
+        <nav>
+            <a href="#register" id="registerNav">Crear Cuenta</a>
+            <a href="#login" id="loginNav" style="display:none;">Iniciar Sesión</a>
+            <a href="#" id="uploadButton" style="display:none;">Subir Video</a>
+            <a href="#videos" id="videosNav" style="display:none;">Videos</a>
+        </nav>
+    </header>
+    <main>
+        <!-- Registro de usuario -->
+        <section id="register" class="section active">
+            <h2>Crear Cuenta</h2>
+            <form id="registerForm">
+                <input type="text" id="registerUsername" placeholder="Nombre de Usuario" required>
+                <input type="email" id="registerEmail" placeholder="Correo Electrónico" required>
+                <input type="password" id="registerPassword" placeholder="Contraseña" required>
+                <button type="submit">Registrarse</button>
+                <p>¿Ya tienes cuenta? <a href="#login" id="goToLogin">Inicia sesión aquí</a></p>
+            </form>
+        </section>
+
+        <!-- Iniciar sesión -->
+        <section id="login" class="section">
+            <h2>Iniciar Sesión</h2>
+            <form id="loginForm">
+                <input type="text" id="loginUsername" placeholder="Nombre de Usuario" required>
+                <input type="password" id="loginPassword" placeholder="Contraseña" required>
+                <button type="submit">Iniciar Sesión</button>
+                <p>¿No tienes cuenta? <a href="#register" id="goToRegister">Crea una aquí</a></p>
+            </form>
+        </section>
+
+        <!-- Subir video -->
+        <section id="upload" class="section">
+            <h2>Sube tu Video</h2>
+            <form id="uploadForm">
+                <input type="file" id="videoFile" accept="video/*" required>
+                <input type="text" id="videoTitle" placeholder="Título del Video" required>
+                <button type="submit">Subir Video</button>
+            </form>
+            <button id="logoutButton">Cerrar Sesión</button>
+        </section>
+
+        <!-- Listado de videos -->
+        <section id="videos" class="section">
+            <h2>Videos</h2>
+            <div id="videoList"></div>
+            <button id="logoutButton">Cerrar Sesión</button>
+        </section>
+    </main>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            let users = JSON.parse(localStorage.getItem('users')) || {};
+            let videos = JSON.parse(localStorage.getItem('videos')) || [];
+            let userLikes = JSON.parse(localStorage.getItem('userLikes')) || {};
+            let currentUser = localStorage.getItem('currentUser') || null;
+
+            // Guardar usuarios, videos y likes en localStorage
+            function saveData() {
+                console.log('Saving data...');
+                localStorage.setItem('users', JSON.stringify(users));
+                localStorage.setItem('videos', JSON.stringify(videos));
+                localStorage.setItem('userLikes', JSON.stringify(userLikes));
+            }
+
+            // Renderizar videos
+            function renderVideos() {
+                console.log('Rendering videos...');
+                const videoList = document.getElementById('videoList');
+                videoList.innerHTML = '';
+                videos.forEach((video, index) => {
+                    const videoElement = document.createElement('div');
+                    videoElement.className = 'video-container';
+                    videoElement.innerHTML = `
+                        <video src="${video.url}" controls width="400"></video>
+                        <div class="video-title">${video.title}</div>
+                        <div class="video-uploader">Subido por: ${video.uploader}</div>
+                        <div class="video-controls">
+                            <button class="like-button" data-index="${index}">👍 Like (${video.likes})</button>
+                            <button class="dislike-button" data-index="${index}">👎 Dislike (${video.dislikes})</button>
+                        </div>
+                        <div class="comments-section">
+                            <div class="comments-toggle">Mostrar Comentarios</div>
+                            <div class="comments" style="display: none;"></div>
+                            <div class="add-comment">
+                                <input type="text" class="comment-input" placeholder="Añadir comentario">
+                                <button class="comment-submit" data-index="${index}">Comentar</button>
+                            </div>
+                        </div>
+                    `;
+                    videoList.appendChild(videoElement);
+
+                    // Mostrar comentarios
+                    videoElement.querySelector('.comments-toggle').addEventListener('click', () => {
+                        const commentsSection = videoElement.querySelector('.comments');
+                        if (commentsSection.style.display === 'none') {
+                            commentsSection.style.display = 'block';
+                            videoElement.querySelector('.comments-toggle').textContent = 'Ocultar Comentarios';
+                        } else {
+                            commentsSection.style.display = 'none';
+                            videoElement.querySelector('.comments-toggle').textContent = 'Mostrar Comentarios';
+                        }
+                    });
+
+                    // Comentar
+                    videoElement.querySelector('.comment-submit').addEventListener('click', () => {
+                        const commentInput = videoElement.querySelector('.comment-input');
+                        const commentText = commentInput.value;
+                        if (commentText) {
+                            videos[index].comments.push({ user: currentUser, text: commentText, replies: [] });
+                            saveData(); // Guardar comentarios en localStorage
+                            renderVideos(); // Volver a renderizar para mostrar nuevos comentarios
+                        }
+                    });
+
+                    // Like/dislike
+                    videoElement.querySelector('.like-button').addEventListener('click', (e) => {
+                        const videoIndex = e.target.dataset.index;
+                        videos[videoIndex].likes++;
+                        saveData(); // Guardar cambios en localStorage
+                        renderVideos(); // Volver a renderizar para mostrar nuevos datos
+                    });
+
+                    videoElement.querySelector('.dislike-button').addEventListener('click', (e) => {
+                        const videoIndex = e.target.dataset.index;
+                        videos[videoIndex].dislikes++;
+                        saveData(); // Guardar cambios en localStorage
+                        renderVideos(); // Volver a renderizar para mostrar nuevos datos
+                    });
+
+                    // Mostrar comentarios de un video
+                    const commentsContainer = videoElement.querySelector('.comments');
+                    videos[index].comments.forEach(comment => {
+                        const commentElement = document.createElement('div');
+                        commentElement.className = 'comment';
+                        commentElement.innerHTML = `
+                            <div class="comment-header">${comment.user}:</div>
+                            <div class="comment-text">${comment.text}</div>
+                        `;
+                        commentsContainer.appendChild(commentElement);
+                    });
+                });
+            }
+
+            // Cerrar sesión
+            document.getElementById('logoutButton').addEventListener('click', () => {
+                localStorage.removeItem('currentUser');
+                currentUser = null;
+                alert('Has cerrado sesión exitosamente.');
+                document.getElementById('register').style.display = 'block';
+                document.getElementById('login').style.display = 'none';
+                document.getElementById('upload').style.display = 'none';
+                document.getElementById('videos').style.display = 'none';
+                document.getElementById('uploadButton').style.display = 'none';
+                document.getElementById('loginNav').style.display = 'block';
+                document.getElementById('registerNav').style.display = 'none';
+                document.getElementById('videosNav').style.display = 'none';
+                document.getElementById('logoutButton').style.display = 'none'; // Ocultar botón de cerrar sesión
+            });
+
+            // Redirigir al inicio de sesión o creación de cuenta si el usuario no está logueado
+            if (!currentUser) {
+                document.getElementById('register').style.display = 'block';
+                document.getElementById('login').style.display = 'none';
+                document.getElementById('upload').style.display = 'none';
+                document.getElementById('videos').style.display = 'none';
+                document.getElementById('uploadButton').style.display = 'none';
+                document.getElementById('loginNav').style.display = 'block';
+                document.getElementById('registerNav').style.display = 'none';
+                document.getElementById('videosNav').style.display = 'none';
+                document.getElementById('logoutButton').style.display = 'none'; // Ocultar botón de cerrar sesión
+            } else {
+                document.getElementById('register').style.display = 'none';
+                document.getElementById('login').style.display = 'none';
+                document.getElementById('upload').style.display = 'block';
+                document.getElementById('videos').style.display = 'block';
+                document.getElementById('uploadButton').style.display = 'block';
+                document.getElementById('loginNav').style.display = 'none';
+                document.getElementById('registerNav').style.display = 'none';
+                document.getElementById('videosNav').style.display = 'block';
+                document.getElementById('logoutButton').style.display = 'block'; // Mostrar botón de cerrar sesión
+                renderVideos(); // Renderizar videos si hay usuario logueado
+            }
+
+            // Navegación
+            document.getElementById('goToLogin').addEventListener('click', () => {
+                document.getElementById('register').style.display = 'none';
+                document.getElementById('login').style.display = 'block';
+            });
+            document.getElementById('goToRegister').addEventListener('click', () => {
+                document.getElementById('register').style.display = 'block';
+                document.getElementById('login').style.display = 'none';
+            });
+
+            // Manejar el registro y login
+            document.getElementById('registerForm').addEventListener('submit', (e) => {
+                e.preventDefault();
+                const username = document.getElementById('registerUsername').value;
+                const email = document.getElementById('registerEmail').value;
+                const password = document.getElementById('registerPassword').value;
+                if (users[username]) {
+                    alert('El nombre de usuario ya existe.');
+                } else {
+                    users[username] = { email, password, videos: [] };
+                    saveData();
+                    alert('Cuenta creada exitosamente.');
+                    document.getElementById('register').style.display = 'none';
+                    document.getElementById('login').style.display = 'block';
+                }
+            });
+
+            document.getElementById('loginForm').addEventListener('submit', (e) => {
+                e.preventDefault();
+                const username = document.getElementById('loginUsername').value;
+                const password = document.getElementById('loginPassword').value;
+                if (users[username] && users[username].password === password) {
+                    currentUser = username;
+                    localStorage.setItem('currentUser', currentUser);
+                    alert('Iniciaste sesión exitosamente.');
+                    document.getElementById('register').style.display = 'none';
+                    document.getElementById('login').style.display = 'none';
+                    document.getElementById('upload').style.display = 'block';
+                    document.getElementById('videos').style.display = 'block';
+                    document.getElementById('uploadButton').style.display = 'block';
+                    document.getElementById('loginNav').style.display = 'none';
+                    document.getElementById('registerNav').style.display = 'none';
+                    document.getElementById('videosNav').style.display = 'block';
+                    document.getElementById('logoutButton').style.display = 'block'; // Mostrar botón de cerrar sesión
+                    renderVideos();
+                } else {
+                    alert('Usuario o contraseña incorrectos.');
+                }
+            });
+
+            document.getElementById('uploadForm').addEventListener('submit', (e) => {
+                e.preventDefault();
+                const videoFile = document.getElementById('videoFile').files[0];
+                const videoTitle = document.getElementById('videoTitle').value;
+                if (videoFile && videoTitle) {
+                    const videoUrl = URL.createObjectURL(videoFile);
+                    videos.push({ url: videoUrl, title: videoTitle, uploader: currentUser, likes: 0, dislikes: 0, comments: [] });
+                    saveData();
+                    alert('Video subido exitosamente.');
+                    document.getElementById('uploadForm').reset();
+                    renderVideos();
+                }
+            });
+        });
+    </script>
+</body>
+</html>
+
